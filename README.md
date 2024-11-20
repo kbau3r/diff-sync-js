@@ -192,3 +192,33 @@ strPatch
      */
     strPatch(val, patch)
 ```
+
+## Additions by us
+
+### How to start the demo application
+
+navigate to the demo/server directory in a terminal and do the following:
+
+`npm install when in the folder directory`
+`npm start from the same directory`
+
+then change to the root directory of the repository and from there
+
+`npm run client`
+
+### Changes we made to the demo so it runs effortlessly:
+
+- adding a http-server for the client in the json package file:
+  "client": "http-server demo/client"
+  as well as the dependecy for it:
+  "http-server": "14.1.1"
+- Changing to a static path for index.js in the client from:
+  "../../src/index.js" -> "diff-sync-js/index.js" with Links
+- Changing the socket to "ws://IP:42998" with IP being your IP obviously
+- For the server adding the IP to the websocket where before it only included the host
+  so going from WebSocket.Server({ port: 42998 }) -> WebSocket.Server({ host: "10.0.107.226", port: 42998 })
+
+### Other (maybe) useful Informations
+
+- Apparently doesnt run on ARM based Linux (Ubuntu 22 in our case) VMs
+- json-fast-patch now needs the the addition of "--save" to install it: `npm install fast-json-patch --save`
