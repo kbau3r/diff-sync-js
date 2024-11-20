@@ -7,7 +7,7 @@
 var jsonpatch = require("fast-json-patch");
 var WebSocket = require("ws");
 var DiffSyncAlghorithm = require("../../src/index");
-var wss = new WebSocket.Server({ port: 42998 });
+var wss = new WebSocket.Server({ host: "10.0.107.226", port: 42998 });
 console.clear();
 var diffSync = new DiffSyncAlghorithm({
     jsonpatch: jsonpatch,
