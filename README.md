@@ -222,3 +222,190 @@ then change to the root directory of the repository and from there
 
 - Apparently doesnt run on ARM based Linux (Ubuntu 22 in our case) VMs
 - json-fast-patch now needs the the addition of "--save" to install it: `npm install fast-json-patch --save`
+
+## Important Questions
+
+1. **Which implementation of the Diff Path Algorithm is being used?**
+
+    The project is using Neil Fraser's Differential Synchronization Algorithm, as for example stated in the diffSync.js file header:
+
+    ```javascript
+    /**
+    * @author Wei Zheng
+    * @github https://github.com/weijie0192/diff-sync-js
+     * @summary A JavaScript implementation of Neil Fraser Differential Synchronization Algorithm
+    */
+    ```
+
+    Additionally you can verify the Diff Patch Alogrithm by looking at the following Characteristics:
+
+    Every patch is acknowledged:
+    Each patch sent from one side (client or server) requires an explicit acknowledgment (ACK) from the other side before further patches are sent. This ensures that no patch is lost or applied out of order.
+
+    Evidence in the code:
+    ```javascript
+    case "ACK":
+        diffSync.onAck(container, payload);
+        break;
+    ```
+    Here, the server explicitly processes acknowledgments to confirm that the other side has received the patch.
+
+    Version tracking ensures synchronization:
+
+    Both sides maintain version numbers (thisVersion and senderVersion) to ensure that only valid patches are applied, and older patches are discarded.
+    Evidence in the code:
+    ```javascript
+    if (shadow[thisVersion] !== payload[thisVersion]) {
+        if (backup[thisVersion] === payload[thisVersion]) {
+            shadow.value = jsonpatch.deepClone(backup.value);
+        } else {
+            return; // Drop the process
+        }
+    }
+    ```
+
+    If the version numbers don’t match, the patch is discarded, and the system falls back to a backup for recovery.
+
+    Edits are stored until acknowledged:
+
+    Patches (edits) are stored in the shadow’s edits array until an acknowledgment is received from the other side.
+    Evidence in the code:
+
+    ```javascript
+    shadow.edits.push({
+        [thisVersion]: shadow[thisVersion],
+        patch
+    });
+    ```
+
+    Backup for fault tolerance:
+
+    Backups are used to revert to the last known good state in case of failure.
+    Evidence in the code:
+
+    ```javascript
+    if (useBackup) {
+        backup.value = jsonpatch.deepClone(shadow.value);
+        backup[thisVersion] = shadow[thisVersion];
+    }
+    ```
+    
+    The code matches the Guaranteed Delivery method due to its use of explicit acknowledgments (ACK), version tracking (thisVersion, senderVersion), backups for fault tolerance, and edit stacks to queue patches until acknowledged. These features ensure no patch is lost, synchronization is reliable, and the system remains consistent, confirming it follows the Guaranteed Delivery approach.
+
+
+2. **Where are the documents and shadows?**
+
+    Server-Side
+
+    Main Document:
+    The main document is stored in the mainText variable on the server:
+
+    ```javascript
+    var mainText = "";
+    ```
+
+    It represents the authoritative copy of the document that is synchronized with all clients.
+
+    Shadow Document:
+
+    Shadows for each client are initialized in the WebSocket connection handler:
+
+    ```javascript
+    var container = {};
+    diffSync.initObject(container, mainText);
+    ```
+    Shadows are stored in the container.shadow object and maintain:
+    Version tracking: thisVersion and senderVersion.
+    Value: A clone of mainText for this client.
+    Edit stack: Tracks patches awaiting acknowledgment.
+
+
+
+    Client-Side
+
+    Local Document:
+    The local document is displayed in the client's text field ($textfield.value) and synchronized with the shadow:
+
+    ```javascript
+    setText(payload.shadow.value);
+    ```
+
+    Shadow Document:
+
+    The client's shadow is initialized when receiving the JOIN message from the server:
+    ```javascript
+        diffSync.initObject(container, payload.shadow.value);
+    ```
+    Shadows are stored in container.shadow and synchronized with the server using patches.
+
+    Initialization of Shadows
+
+    The initObject method in the DiffSyncAlghorithm class is responsible for setting up the shadow documents on both the server and client:
+
+    ```javascript
+    initObject(container, mainText) {
+        container.shadow = {
+            thisVersion: 0,
+            senderVersion: 0,
+            value: jsonpatch.deepClone(mainText),
+            edits: []
+        };
+        if (this.useBackup) {
+            container.backup = {
+                thisVersion: 0,
+                senderVersion: 0,
+                value: jsonpatch.deepClone(mainText)
+            };
+        }
+    }
+    ```
+
+3. **How and why can we adjust the sync cycle? What are the disadvantages and advantages?**
+
+    The synchronization cycle can be adjusted by modifying the patch delay on the client side. This is controlled using the range input ($timeoutDelay) in the client UI, which sets the delay between changes being made locally and patches being sent to the server.
+
+    Adjusting Patch Delay:
+    ```javascript
+    $timeoutDelay.oninput = function () {
+        localStorage.setItem("timeoutDelay", this.value);
+        $timeoutDelayLabel.innerHTML = "Patch Delay: " + this.value + "ms";
+    };
+    ```
+
+    Sending Patches After Delay: When a user modifies the document, patches are sent after the specified delay:
+    ```javascript
+    function processSend(value) {
+        clearTimeout(timeout);
+        var delay = parseInt($timeoutDelay.value);
+
+        if (delay > 0) {
+            timeout = setTimeout(() => {
+                sendPatch(value);
+            }, delay);
+        } else {
+            sendPatch(value);
+        }
+    }
+    ```
+    The delay is dynamically applied and stored in local storage for persistence.
+
+    Why adjust the sync cycle?
+    Purpose:
+        To optimize synchronization based on network conditions, resource usage, and application responsiveness.
+        Longer delays reduce synchronization frequency, while shorter delays ensure real-time responsiveness.    
+
+    Lower Delay (Faster Sync):
+        Advantages:
+            Real-time updates ensure immediate consistency across clients.
+            Suitable for low-latency environments (e.g., local networks).
+        Disadvantages:
+            Higher network usage due to frequent patch transmissions.
+            Increased resource usage on the server and client for processing frequent updates.
+
+    Higher Delay (Slower Sync):
+        Advantages:
+            Reduced network traffic and server load.
+            More efficient in high-latency environments or with unreliable networks.
+        Disadvantages:
+            Increases the likelihood of user conflicts (e.g., two users editing the same section before syncing).
+            Slower updates may impact collaborative editing experience.
