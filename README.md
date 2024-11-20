@@ -409,3 +409,40 @@ then change to the root directory of the repository and from there
         Disadvantages:
             Increases the likelihood of user conflicts (e.g., two users editing the same section before syncing).
             Slower updates may impact collaborative editing experience.
+
+Francesco:
+
+
+7. **Are the JSON documents interchangeable with other kinds of documents (any kind of documents)?**
+
+No. diff-sync.js is designed specifically for JSON objects, which are structured and hierarchical data formats. Even though you could convert other types of files into a JSON file, this might not be as functional as possible.
+
+
+---
+
+
+8. **How is Mr. Wei solving the conflicts?**
+
+Mr. Wei solves conflicts in diff-sync.js by using Neil Fraser's Differential Synchronization Algorithm. In the `onAck` method, he checks if the shadow version is the same as the payload's version and if the backup is different. If both are true, the code logs a message and copies the backup using `jsonpatch.deepClone`. Specifically, the following code snippet ensures that when there's a version mismatch, the backup is restored to keep the data consistent and resolve the conflict.:
+
+```javascript
+if (shadow[thisVersion] === payload[thisVersion] && backup[thisVersion] != payload[thisVersion]) {
+  this.log("backup not match, clone backup!");
+  backup.value = jsonpatch.deepClone(shadow.value);
+  backup[thisVersion] = shadow[thisVersion];
+}
+```
+
+
+
+---
+
+9. **What are possible enhancements of Mr Weis Code? Should you suggest a Pull-request**
+You can enhance Mr. Wei's diff-sync.js by improving the documentation of the code, also making the README.md clearer with detailed examples and usage instructions. Also, adding customization options would allow users to adapt the synchronization process to their specific needs. It would be smart to use a Pull-Request in this project, because it would increase collaboration and code quality.
+
+
+---
+
+10. **Is it possible to combine diff-sync.js with a doc-priented nosql-DB such as couchDB and so on**
+
+Yes it is possible to integrate diff-sync.js with a document-oriented NoSQL database like CouchDB. You can use diff-sync.js to handle and synchronize changes to your JSON documents, while CouchDB manages data storage and replication. 
